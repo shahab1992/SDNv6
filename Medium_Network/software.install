@@ -1,0 +1,38 @@
+# TODO!
+
+# This file contains the list of software to be installed on each linux container.
+# The best approach would be to define your own repository, add it to the list of repository and automate the
+# installation of all the required software. Otherwise you should manually install the software on the base container.
+
+[Repositories]
+
+deb http://10.228.40.49/dists trusty/
+
+[Software]
+
+software-properties-common
+build-essential
+openssh-client
+openssh-server
+ifstat
+sysstat
+nano
+psmisc
+ndn-cxx
+ndn-cxx-dev
+nfd
+mapme-cli
+iperf
+ndndump
+ndn-dissect
+ndnpeek
+ndnping
+nfd-autoreg
+ndn-tlv-ping
+ndn-pib
+ndn-dissect-wireshark
+ndn-autoconfig-server
+# iperf3
+ndn-virtual-repo
+ndn-icp-download
+localclient

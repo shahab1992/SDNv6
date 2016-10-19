@@ -1,0 +1,12 @@
+# This configuration file is used to rapidly set the mobility model of the experiment.
+# For now, the following models are supported:
+# 1) Random Walk
+# 2) Random Waypoint
+
+
+# Parameters: Duration (seconds), StartingPoint (Coordinates(km)), speed (m/s)
+
+# ^	         ^		    ^	     ^      ^         ^
+# Node_id    model      Duration x      y         Speed
+
+# Note that the speed is used just for the random waypoint mobility model.

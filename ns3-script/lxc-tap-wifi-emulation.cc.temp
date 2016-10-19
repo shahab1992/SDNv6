@@ -1,0 +1,377 @@
+#include "ns3/core-module.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/network-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/wifi-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/csma-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/tap-bridge-module.h"
+#include "ns3/netanim-module.h"
+#include <unistd.h>
+#include <math.h>
+#include <sstream>
+#include <boost/algorithm/string.hpp>
+#include <list>
+
+#define N_AP            1
+#define SSID            "ns-3-ssid"
+#define PCAP_FILE       "lxc-ns-trace"
+#define AMIMATION_FILE  "emulation_animation"
+#define TAP_BR_MODE     "UseLocal"
+#define RANDOM_WAYPOINT "random_waypoint"
+#define RANDOM_WALK     "random_walk"
+
+using namespace ns3;
+
+void setRandomWalkMobility(MobilityHelper& mobility,
+                           float x_0,
+                           float x_bound,
+                           float y_0,
+                           float y_bound,
+                           float min_speed,
+                           float max_speed)
+{
+  Ptr<UniformRandomVariable> speed = CreateObject<UniformRandomVariable>  ();
+  speed->SetAttribute("Min", DoubleValue (min_speed));
+  speed->SetAttribute("Max", DoubleValue (max_speed));
+
+
+  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                             "Speed", PointerValue (speed),
+                             "Bounds", RectangleValue (Rectangle (x_0,
+                                                                  x_bound,
+                                                                  y_0,
+                                                                  y_bound)));
+}
+
+void setRandomWaypointMobility(MobilityHelper& mobility,
+                               float x_0,
+                               float x_bound,
+                               float y_0,
+                               float y_bound,
+                               float min_speed,
+                               float max_speed,
+                               float min_pause,
+                               float max_pause)
+{
+//  Ptr<RandomBoxPositionAllocator> wpPositionAlloc = CreateObject<RandomBoxPositionAllocator> ();
+//
+//  Ptr<UniformRandomVariable> rvx = CreateObject<UniformRandomVariable>  ();
+//  rvx->SetAttribute("Min", DoubleValue (x_0));
+//  rvx->SetAttribute("Max", DoubleValue (x_bound));
+//
+//  Ptr<UniformRandomVariable> rvy = CreateObject<UniformRandomVariable>  ();
+//  rvy->SetAttribute("Min", DoubleValue (y_0));
+//  rvy->SetAttribute("Max", DoubleValue (y_bound));
+//
+//  Ptr<ConstantRandomVariable> rvz = CreateObject<ConstantRandomVariable> ();
+//  rvz->SetAttribute("Constant", DoubleValue (0));
+//
+//  Ptr<UniformRandomVariable> speed = CreateObject<UniformRandomVariable>  ();
+//  speed->SetAttribute("Min", DoubleValue (min_speed));
+//  speed->SetAttribute("Max", DoubleValue (max_speed));
+//
+//  Ptr<UniformRandomVariable> pause = CreateObject<UniformRandomVariable>  ();
+//  pause->SetAttribute("Min", DoubleValue (min_pause));
+//  pause->SetAttribute("Max", DoubleValue (max_pause));
+//
+//  wpPositionAlloc->SetX(rvx);
+//  wpPositionAlloc->SetY(rvy);
+//  wpPositionAlloc->SetZ(rvz);
+
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+
+//  for (int i = 0; i < 50; i++)
+//  {
+    positionAlloc->Add(Vector ((x_0 + x_bound)/2 + 50, (y_0 + y_bound)/2, 0.0));
+    positionAlloc->Add(Vector ((x_0 + x_bound)/2 - 50, (y_0 + y_bound)/2, 0.0));
+//  }
+  Ptr<UniformRandomVariable> speed = CreateObject<UniformRandomVariable>  ();
+  speed->SetAttribute("Min", DoubleValue (3));
+  speed->SetAttribute("Max", DoubleValue (3.00001));
+
+  Ptr<UniformRandomVariable> pause = CreateObject<UniformRandomVariable>  ();
+  pause->SetAttribute("Min", DoubleValue (0));
+  pause->SetAttribute("Max", DoubleValue (0.00001));
+
+
+  mobility.SetMobilityModel ("ns3::RandomWaypointMobilityModel",
+                             "PositionAllocator", PointerValue (positionAlloc),
+                             "Pause", PointerValue (pause),
+                             "Speed", PointerValue (speed));
+}
+
+
+
+
+NS_LOG_COMPONENT_DEFINE ("lxc-tap-wifi-emulation");
+void onWifiAssoc(std::string context, Mac48Address ap)
+{
+  std::cout << "Associated to new AP!" << std::endl;
+  exit(-1);
+}
+
+void onWifiDeAssoc(std::string context, Mac48Address ap)
+{
+  std::cout << "De-Associated from AP!" << std::endl;
+  exit(-1);
+}
+
+int
+main (int argc, char *argv[])
+{
+  //
+  // We are interacting with the outside, real, world.  This means we have to
+  // interact in real-time and therefore means we have to use the real-time
+  // simulator and take the time to calculate checksums.
+  //
+  GlobalValue::Bind ("SimulatorImplementationType", StringValue ("ns3::RealtimeSimulatorImpl"));
+  GlobalValue::Bind ("ChecksumEnabled", BooleanValue (true));
+
+  std::string mob_model       = "";
+  std::string bs_x_str        = "";
+  std::string bs_y_str        = "";
+  std::string bs_index        = "";
+  std::string bs_tap          = "";
+  std::string sta_taps_str    = "";
+  std::string sta_macs_str    = "";
+  std::string n_sta_str       = "";
+  std::string min_speed_str   = "";
+  std::string max_speed_str   = "";
+  std::string min_pause_str   = "";
+  std::string max_pause_str   = "";
+  std::string cell_size_str   = "";
+  std::string bs_mac_str      = "";
+
+  float bs_x         = 0;
+  float bs_y         = 0;
+  float min_speed    = 0;
+  float max_speed    = 0;
+  float min_pause    = 0;
+  float max_pause    = 0;
+  float cell_size    = 0;
+  unsigned int n_sta = 0;
+
+  CommandLine cmd;
+  cmd.AddValue ("model",      "Mobility model of the station",                              mob_model     );
+  cmd.AddValue ("bs_tap",     "Name of the tap between NS3 and the base station",           bs_tap        );
+  cmd.AddValue ("n_sta",      "Number of stations",                                         n_sta_str     );
+  cmd.AddValue ("sta-taps",   "List of the taps between NS3 and the mobile stations",       sta_taps_str     );
+  cmd.AddValue ("sta-macs",   "List of the macs of the mobile stations",                    sta_macs_str     );
+  cmd.AddValue ("bs_x",       "X position of the Base Station",                             bs_x_str      );
+  cmd.AddValue ("bs_y",       "Y position of the Base Station",                             bs_y_str      );
+  cmd.AddValue ("min_speed",  "Minimum value for the speed",                                min_speed_str );
+  cmd.AddValue ("max_speed",  "Maximum value for the speed",                                max_speed_str );
+  cmd.AddValue ("cell_size",  "Coverage of the cell",                                       cell_size_str );
+  cmd.AddValue ("min_pause",  "Minimum value for the pause",                                min_pause_str );
+  cmd.AddValue ("max_pause",  "Minimum value for the speed",                                max_pause_str );
+  cmd.AddValue ("bs_index",   "Index of the base station",                                  bs_index      );
+  cmd.AddValue ("bs_mac",     "Base station MAC address",                                   bs_mac_str    );
+
+  cmd.Parse (argc, argv);
+
+  if ((mob_model     != RANDOM_WAYPOINT  &&
+       mob_model     != RANDOM_WALK)     ||
+       bs_tap        == ""               ||
+       n_sta_str     == ""               ||
+       sta_taps_str  == ""               ||
+       min_speed_str == ""               ||
+       max_speed_str == ""               ||
+       sta_macs_str  == ""               ||
+       cell_size_str == ""               ||
+       bs_x_str      == ""               ||
+       bs_y_str      == ""               ||
+       bs_index      == ""
+     )
+  {
+    std::cerr << "Mobility model not correct or tap interfaces nor specified or important parameters are missing!" << std::endl;
+    return -1;
+  }
+
+  cell_size = atof (cell_size_str.c_str ());
+  bs_x      = atof (bs_x_str.c_str ());
+  bs_y      = atof (bs_y_str.c_str ());
+  n_sta     = atoi (n_sta_str.c_str ());
+  min_speed = atof (min_speed_str.c_str ());
+  max_speed = atof (max_speed_str.c_str ());
+
+  if (mob_model == RANDOM_WAYPOINT)
+  {
+    if (min_pause_str == "" ||
+        max_pause_str == ""
+       )
+      {
+        std::cerr << "Please insert all the command line arguments for the mobility model!" << std::endl;
+        return -1;
+      }
+
+    min_pause = atof (min_pause_str.c_str ());
+    max_pause = atof (max_pause_str.c_str ());
+  }
+
+  NodeContainer wifiStaNodes;
+  wifiStaNodes.Create (n_sta);
+  NodeContainer wifiApNodes;
+  wifiApNodes.Create (N_AP);
+
+  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
+  channel.AddPropagationLoss("ns3::NakagamiPropagationLossModel",
+                                     "m0", DoubleValue(1.0),
+                                     "m1", DoubleValue(1.0),
+                                     "m2", DoubleValue(1.0));
+
+
+  YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
+  phy.SetChannel (channel.Create ());
+  phy.Set ("ShortGuardEnabled", BooleanValue (1));
+
+  WifiHelper wifi = WifiHelper::Default ();
+  wifi.SetStandard (WIFI_PHY_STANDARD_80211n_5GHZ);
+  HtWifiMacHelper mac = HtWifiMacHelper::Default ();
+
+  wifi.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
+
+  Ssid ssid = Ssid (SSID);
+
+//   XXX For some reason this feature seems not working with the ndn congestion protocol XXX
+  mac.SetMpduAggregatorForAc (AC_BE, "ns3::MpduStandardAggregator"); // A-MPDU  of max length 65535 bytes
+  mac.SetMsduAggregatorForAc (AC_BE, "ns3::MsduStandardAggregator"); // A-MSDU of max length 7935 bytes
+  mac.SetBlockAckThresholdForAc (AC_BE, 2); // block acknowledgement of 5 MPDU
+  mac.SetBlockAckInactivityTimeoutForAc (AC_BE, 400);
+
+
+  mac.SetType ("ns3::StaWifiMac",
+               "Ssid",          SsidValue (ssid),
+               "ActiveProbing", BooleanValue (false));
+
+  NetDeviceContainer staDevices;
+  staDevices = wifi.Install (phy, mac, wifiStaNodes);
+
+  mac.SetType ("ns3::ApWifiMac",
+               "Ssid", SsidValue (ssid));
+
+  NetDeviceContainer apDevices;
+  apDevices = wifi.Install (phy, mac, wifiApNodes);
+
+  Config::Set ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/ChannelWidth", UintegerValue (40));
+
+  MobilityHelper mobility;
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+
+//  positionAlloc->Add(Vector (bs_x, bs_y, 0.0));
+//  mobility.SetPositionAllocator(positionAlloc);
+
+  if (mob_model == RANDOM_WAYPOINT)
+    setRandomWaypointMobility(mobility,
+                              bs_x - cell_size,
+                              bs_x + cell_size,
+                              bs_y - cell_size,
+                              bs_y + cell_size,
+                              min_speed,
+                              max_speed,
+                              min_pause,
+                              max_pause);
+  else
+    setRandomWalkMobility(mobility,
+                          bs_x - cell_size,
+                          bs_x + cell_size,
+                          bs_y - cell_size,
+                          bs_y + cell_size,
+                          min_speed,
+                          max_speed);
+
+    Ptr<ListPositionAllocator> positionAlloc1 = CreateObject<ListPositionAllocator> ();
+
+//  for (int i = 0; i < 50; i++)
+//  {
+    positionAlloc1->Add(Vector (bs_x, bs_y, 0.0));
+    positionAlloc1->Add(Vector (bs_x - 50, bs_y, 0.0));
+//  }
+  Ptr<UniformRandomVariable> speed = CreateObject<UniformRandomVariable>  ();
+  speed->SetAttribute("Min", DoubleValue (3));
+  speed->SetAttribute("Max", DoubleValue (3.00001));
+
+  Ptr<UniformRandomVariable> pause = CreateObject<UniformRandomVariable>  ();
+  pause->SetAttribute("Min", DoubleValue (0));
+  pause->SetAttribute("Max", DoubleValue (0.00001));
+
+
+  mobility.SetMobilityModel ("ns3::RandomWaypointMobilityModel",
+                             "PositionAllocator", PointerValue (positionAlloc1),
+                             "Pause", PointerValue (pause),
+                             "Speed", PointerValue (speed));
+
+  mobility.Install (NodeContainer(wifiStaNodes.Get (0), wifiStaNodes.Get(1)));
+
+  Ptr<ListPositionAllocator> positionAlloc2 = CreateObject<ListPositionAllocator> ();
+
+  positionAlloc2->Add(Vector (bs_x - 50, bs_y, 0.0));
+  positionAlloc2->Add(Vector (bs_x, bs_y, 0.0));
+
+  mobility.SetMobilityModel ("ns3::RandomWaypointMobilityModel",
+                             "PositionAllocator", PointerValue (positionAlloc2),
+                             "Pause", PointerValue (pause),
+                             "Speed", PointerValue (speed));
+
+  mobility.Install (NodeContainer(wifiStaNodes.Get (2), wifiStaNodes.Get(3)));
+
+  Ptr<ListPositionAllocator> positionAlloc3 = CreateObject<ListPositionAllocator> ();
+
+  positionAlloc3->Add(Vector (bs_x, bs_y, 0.0));
+  positionAlloc3->Add(Vector (bs_x, bs_y + 50, 0.0));
+
+  mobility.SetMobilityModel ("ns3::RandomWaypointMobilityModel",
+                             "PositionAllocator", PointerValue (positionAlloc3),
+                             "Pause", PointerValue (pause),
+                             "Speed", PointerValue (speed));
+
+  mobility.Install (NodeContainer(wifiStaNodes.Get(4)));
+
+  positionAlloc->Add(Vector (bs_x, bs_y, 0.0));
+  mobility.SetPositionAllocator(positionAlloc);
+  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+  mobility.Install (wifiApNodes);
+
+  TapBridgeHelper tapBridge;
+  tapBridge.SetAttribute ("Mode",       StringValue (TAP_BR_MODE));
+
+  std::list<std::string> taps_list;
+  boost::split(taps_list, sta_taps_str, boost::is_any_of(","));
+
+  std::list<std::string> macs_list;
+  boost::split(macs_list, sta_macs_str, boost::is_any_of(","));
+
+  std::list<std::string>::const_iterator tap_sta;
+  std::list<std::string>::const_iterator mac_sta;
+  uint32_t i;
+
+  for (tap_sta = taps_list.begin (),
+       mac_sta = macs_list.begin (),
+       i = 0;
+       tap_sta != taps_list.end () && mac_sta != macs_list.end ();
+       tap_sta++, mac_sta++, i++)
+   {
+      staDevices.Get (i)->SetAddress (Mac48Address (mac_sta->c_str ()));
+      tapBridge.SetAttribute ("DeviceName", StringValue (tap_sta->c_str ()));
+      tapBridge.Install (wifiStaNodes.Get (i), staDevices.Get (i));
+   }
+
+  tapBridge.SetAttribute("DeviceName", StringValue (bs_tap.c_str ()));
+  tapBridge.Install (wifiApNodes.Get (0), apDevices.Get (0));
+  apDevices.Get (0)->SetAddress (Mac48Address (bs_mac_str.c_str()));
+
+  // phy.EnablePcapAll (bs_index, true);
+
+  //AnimationInterface anim (AMIMATION_FILE);
+
+  //std::cout << "LAlAL" << std::endl;
+
+  // Print the PID in order to be killed
+  std::cout << getpid() << std::endl;
+
+  Simulator::Stop ();
+  Simulator::Run ();
+  Simulator::Destroy ();
+  return 0;
+}

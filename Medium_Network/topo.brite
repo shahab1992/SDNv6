@@ -1,0 +1,17 @@
+Topology: ( 3 ns, 1 Edges )
+
+Nodes: (3)
+shahab      251     100    0            l       best-route                             		    AS_NODE
+mauro      696     100    1000         l        best-route	    50	    50    square   100      AS_BASE_STATION
+jordan      696     100    1000         l       best-route	    50	    50    square   100      AS_BASE_STATION
+michel      696     100    1000         l       best-route	    50	    50    square   100      AS_BASE_STATION
+luca      696     100    1000         l         best-route	    50	    50    square   100      AS_BASE_STATION
+
+
+Edges: (1)
+0    shahab    mauro    100000.0        0.001          50000.0       2       0       E_AS    U
+1    shahab    jordan    100000.0       0.001          80000.0       2       0       E_AS    U
+2    shahab    luca    100000.0         0.001          20000.0       2       0       E_AS    U
+3    michel    jordan    100000.0       0.001          50000.0       2       0       E_AS    U
+2    luca    jordan    100000.0         0.001          70000.0       2       0       E_AS    U
+2    mauro    jordan    100000.0        0.001          40000.0       2       0       E_AS    U
