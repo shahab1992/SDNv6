@@ -343,7 +343,7 @@ These files are the following:
         max_pause = 5
 
         # NS-3 script Location (For Mobility)
-        home_folder = /home/shahab
+        home_folder = /home/crackle
         ndnmobility = NDNMobility
         ns3_folder = ns-allinone-3.24.1/ns-3.24.1
         ns3_conf_file_name = topo.conf

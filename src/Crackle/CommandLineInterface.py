@@ -47,11 +47,16 @@ can interact with the software, by executing experiments and retrieving the resu
 
 welcome = make_colored("cyan",
                        """
-                       ================================================
-                                       Welcome to Crackle
-                       ================================================
-                                 * Type 'help' for a brief help
-                       """)
+       /---------------------------
+      /  |5                       /
+     /  _|\/                     /
+    /  |_|/\/                   /
+   /   ----- Welcom To Crackle / 
+  /      ||_5                  /
+ /      _||                  /
+/      |_||                 /
+---------------------------
+                     """)
 
 help = make_colored("darkgreen",
                     """
