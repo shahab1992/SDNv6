@@ -1,6 +1,6 @@
 # SDN
 
-This Software is designed for a Research and Experiment as a Master project fo routing problem in ICN networks with Software Defined Networking.
+The routing module of this Software is designed for a Master project fo routing problem in ICN networks with centralizing approach.
 
 This project has been moved to the new project as https://wiki.fd.io/view/Vicn. 
 
